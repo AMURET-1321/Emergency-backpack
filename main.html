@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>防災バッグパッカー</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* カスタムスタイルとTailwindの組み合わせ */
+        /* (既存のスタイル...変更なし) */
         :root {
             /* JSで動的に設定されます */
             --grid-cols: 10;
@@ -172,18 +171,18 @@
                 <!-- Options will be populated by JS -->
             </select>
         </div>
-
-        <!-- 難易度選択 -->
+        
+        <!-- 季節を選択 -->
         <div class="mb-6">
-            <label class="block text-lg font-semibold mb-2 text-gray-700">2. 季節を選択</label>
-            <div id="difficulty-options" class="flex flex-col space-y-2">
-                <!-- Radios will be populated by JS -->
-            </div>
+            <label class="block text-lg font-semibold mb-2 text-gray-700" for="season-select">1.5. 季節を選択</label>
+            <p class="text-sm text-gray-500 mb-2">季節によってもアイテムの重要度が変動します。</p>
+            <select id="season-select" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-150">
+                </select>
         </div>
         
         <!-- 難易度選択 -->
         <div class="mb-6">
-            <label class="block text-lg font-semibold mb-2 text-gray-700">3. 難易度（バッグサイズ）を選択</label>
+            <label class="block text-lg font-semibold mb-2 text-gray-700">2. 難易度（バッグサイズ）を選択</label>
             <div id="difficulty-options" class="flex flex-col space-y-2">
                 <!-- Radios will be populated by JS -->
             </div>
@@ -199,8 +198,10 @@
         <!-- ステータスバー -->
         <div class="w-full max-w-lg mb-4 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400">
             <div class="text-sm text-gray-600 mb-1">
-                シナリオ: <span id="current-scenario" class="font-bold text-purple-600"></span> / 難易度: <span id="current-difficulty" class="font-bold text-blue-600"></span>
-            </div>
+                シナリオ: <span id="current-scenario" class="font-bold text-purple-600"></span> / 
+                季節: <span id="current-season" class="font-bold text-indigo-600"></span> / 
+                難易度: <span id="current-difficulty" class="font-bold text-blue-600"></span>
+                </div>
             <div class="text-xl font-semibold text-gray-700">
                 スコア (重要度合計): <span id="score" class="text-green-600 text-2xl">0</span>
             </div>
@@ -255,8 +256,9 @@
         
         <div class="mb-6 p-4 bg-yellow-50 rounded-lg">
             <p class="text-lg font-semibold text-gray-800">
-                目標シナリオ: <span id="report-scenario" class="text-purple-600"></span>
-            </p>
+                目標シナリオ: <span id="report-scenario" class="text-purple-600"></span> 
+                (<span id="report-season" class="text-indigo-600"></span>)
+                </p>
             <p class="text-lg font-semibold text-gray-800">
                 最終スコア: <span id="report-final-score" class="text-green-600 text-2xl">0</span>
             </p>
@@ -296,6 +298,7 @@
     // シナリオ/難易度設定変数
     let selectedScenario = 'default';
     let selectedDifficulty = 'medium';
+    let selectedSeason = 'spring'; 
 
     // DOM要素
     const settingsScreen = document.getElementById('settings-screen');
@@ -315,7 +318,9 @@
     const difficultyOptions = document.getElementById('difficulty-options');
     const currentScenarioDisplay = document.getElementById('current-scenario');
     const currentDifficultyDisplay = document.getElementById('current-difficulty');
-
+    const seasonSelect = document.getElementById('season-select');
+    const currentSeasonDisplay = document.getElementById('current-season');
+    const reportSeason = document.getElementById('report-season');
     const reportModal = document.getElementById('report-modal');
     const closeReportButton = document.getElementById('close-report-button');
     const reportAchievment = document.getElementById('report-achievment');
@@ -370,6 +375,40 @@
         }
     };
     
+    // シナリオとは別に乗算される修正子
+    const SEASONS = {
+        'spring': { 
+            name: "春", 
+            modifiers: {
+                "救急セット": 1.1, // 花粉症や怪我
+                "水 (2L)": 1.1 // 暖かくなってくる
+            }
+        },
+        'summer': { 
+            name: "夏", 
+            modifiers: {
+                "水 (2L)": 1.8, // 脱水対策
+                "防寒着/毛布": 0.5, // 優先度低下
+                "美容家電 (ヘアアイロン等)": 0.2
+            }
+        },
+        'autumn': { 
+            name: "秋", 
+            modifiers: {
+                "非常食 (3日分)": 1.1, // 食料確保
+                "防寒着/毛布": 1.2 // 寒暖差対策
+            }
+        },
+        'winter': { 
+            name: "冬", 
+            modifiers: {
+                "防寒着/毛布": 2.0, // 必須
+                "非常食 (3日分)": 1.2, // カロリー消費
+                "水 (2L)": 0.9 // 夏よりは優先度低下
+            }
+        }
+    };
+
     // アイテム定義 (ベースとなる重要度、形状、説明)
     // category: レポート作成のための分類
     const BASE_ITEMS = [
@@ -405,6 +444,16 @@
         }
         scenarioSelect.value = selectedScenario;
         
+        seasonSelect.innerHTML = '';
+        for (const key in SEASONS) {
+            const season = SEASONS[key];
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = season.name;
+            seasonSelect.appendChild(option);
+        }
+        seasonSelect.value = selectedSeason;
+
         // 難易度（バッグサイズ）のロード
         difficultyOptions.innerHTML = '';
         for (const key in DIFFICULTY_SETTINGS) {
@@ -438,6 +487,7 @@
     function initGame() {
         // 1. 設定値の取得と適用
         selectedScenario = scenarioSelect.value;
+        selectedSeason = seasonSelect.value;
         const selectedDifficultyKey = difficultyOptions.querySelector('input[name="difficulty"]:checked').value;
         selectedDifficulty = selectedDifficultyKey;
 
@@ -465,6 +515,7 @@
         settingsScreen.classList.add('hidden');
         gameScreen.classList.remove('hidden');
         currentScenarioDisplay.textContent = SCENARIOS[selectedScenario].name;
+        currentSeasonDisplay.textContent = SEASONS[selectedSeason].name;
         currentDifficultyDisplay.textContent = DIFFICULTY_SETTINGS[selectedDifficulty].name;
 
         // 4. グリッドの描画
@@ -513,6 +564,7 @@
         }
     }
 
+
     /**
      * 次に詰めるアイテムをランダムに選択し、表示します。
      */
@@ -527,12 +579,15 @@
         currentPiece = { ...basePiece, id: currentPieceId }; 
         currentPieceId++;
         
-        // シナリオに応じた重要度の計算
+        // ★★★ 変更点: シナリオと季節に応じた重要度の計算 ★★★
         const scenario = SCENARIOS[selectedScenario];
-        const modifier = scenario.modifiers[currentPiece.name] || 1.0;
+        const season = SEASONS[selectedSeason];
+
+        const scenarioModifier = scenario.modifiers[currentPiece.name] || 1.0;
+        const seasonModifier = season.modifiers[currentPiece.name] || 1.0;
         
-        // 実効重要度 (小数点以下を四捨五入)
-        const effectiveImportance = Math.round(currentPiece.importance * modifier);
+        // 実効重要度 (ベース重要度 * シナリオ修正 * 季節修正)
+        const effectiveImportance = Math.round(currentPiece.importance * scenarioModifier * seasonModifier);
         currentPiece.effectiveImportance = effectiveImportance;
 
         // UI表示の更新
@@ -775,8 +830,15 @@
 
         BASE_ITEMS.forEach(item => {
             const scenario = SCENARIOS[selectedScenario];
-            const modifier = scenario.modifiers[item.name] || 1.0;
-            const effectiveImportance = Math.round(item.importance * modifier);
+            // ★★★ 変更点: 季節を取得 ★★★
+            const season = SEASONS[selectedSeason];
+            
+            const scenarioModifier = scenario.modifiers[item.name] || 1.0;
+            // ★★★ 変更点: 季節の修正子を取得 ★★★
+            const seasonModifier = season.modifiers[item.name] || 1.0;
+            
+            // ★★★ 変更点: 季節の修正子も乗算 ★★★
+            const effectiveImportance = Math.round(item.importance * scenarioModifier * seasonModifier);
             
             // 重要度がMIN_REQUIRED_IMPORTANCE以上のアイテムを必須と見なす
             if (effectiveImportance >= MIN_REQUIRED_IMPORTANCE) {
@@ -799,7 +861,8 @@
             feedback.push({
                 type: 'bad',
                 title: '❌ 必須アイテムの不足',
-                details: `今回の**「${SCENARIOS[selectedScenario].name}」**シナリオにおいて、以下の重要アイテムがバッグにありませんでした。これらが不足すると、生存率が大幅に低下する恐れがあります。`,
+                // ★★★ 変更点: 季節をフィードバックに追加 ★★★
+                details: `今回の**「${SCENARIOS[selectedScenario].name}」(${SEASONS[selectedSeason].name})**シナリオにおいて、以下の重要アイテムがバッグにありませんでした。これらが不足すると、生存率が大幅に低下する恐れがあります。`,
                 items: missingItems.map(item => `${item.name} (重要度: ${item.effectiveImportance})`)
             });
         } else {
@@ -864,6 +927,8 @@
         
         // 最終スコア表示
         reportScenario.textContent = SCENARIOS[selectedScenario].name;
+        // ★★★ 変更点: 季節をレポートに表示 ★★★
+        reportSeason.textContent = SEASONS[selectedSeason].name;
         reportFinalScore.textContent = score;
 
         // モーダルを表示
@@ -941,5 +1006,4 @@
 </script>
 
 </body>
-
 </html>
