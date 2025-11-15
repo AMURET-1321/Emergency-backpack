@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MinnaRecom (みんなリコム) - あなたのおすすめを共有しよう</title>
+
+    <style>
+        /* サイト全体の基本設定 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9; /* 背景色を薄いグレーに */
+            color: #333; /* 基本の文字色 */
+        }
+
+        /* リンクの基本スタイル */
+        a {
+            color: #007bff; /* リンク色 */
+            text-decoration: none; /* 下線を消す */
+        }
+        a:hover {
+            text-decoration: underline; /* マウスを乗せたら下線を出す */
+        }
+
+        /* 共通の横幅制限（中央寄せ） */
+        header, main, footer {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ▼ 1. ヘッダー (サイト上部) ▼ */
+        header {
+            display: flex; /* 横並びにする */
+            justify-content: space-between; /* 両端に寄せる */
+            align-items: center; /* 上下中央揃え */
+            background-color: #fff;
+            border-bottom: 2px solid #eee;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #007bff;
+        }
+        header nav ul {
+            margin: 0;
+            padding: 0;
+            list-style: none; /*箇条書きの点を消す*/
+        }
+        header nav li {
+            display: inline-block; /* 横並びにする */
+            margin-left: 15px;
+        }
+        /* 新規投稿ボタンを目立たせる */
+        header nav li:first-child a {
+            background-color: #007bff;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 5px;
+        }
+        header nav li:first-child a:hover {
+            background-color: #0056b3;
+            text-decoration: none;
+        }
+
+        /* ▼ 2. メインコンテンツ ▼ */
+        main {
+            background-color: #fff;
+        }
+        
+        /* セクションごとの余白 */
+        section {
+            margin-bottom: 40px;
+        }
+        
+        /* メインビジュアル */
+        .hero {
+            background-color: #007bff;
+            color: #fff;
+            padding: 40px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .hero h2 {
+            margin-top: 0;
+        }
+
+        /* カテゴリー */
+        .categories ul {
+            padding: 0;
+            list-style: none;
+            display: flex; /* 横並び */
+            flex-wrap: wrap; /* 折り返しあり */
+            gap: 10px; /* 隙間 */
+        }
+        .categories li a {
+            display: block;
+            padding: 10px 15px;
+            background-color: #f0f0f0;
+            border-radius: 20px;
+        }
+        .categories li a:hover {
+            background-color: #ddd;
+            text-decoration: none;
+        }
+
+        /* おすすめカード (新着・ランキング共通) */
+        .recommend-list {
+            display: grid; /* グリッドレイアウト */
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 画面幅に応じて列数を自動調整 */
+            gap: 20px;
+        }
+
+        .recommend-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden; /* 角丸を画像にも適用 */
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* 影 */
+        }
+        .recommend-card img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover; /* 画像の比率を保ったままトリミング */
+        }
+        .recommend-card h3 {
+            font-size: 18px;
+            margin: 10px 15px;
+        }
+        .recommend-card p {
+            font-size: 14px;
+            margin: 0 15px 15px 15px;
+            color: #666;
+        }
+        
+        /* ランキング */
+        .ranking ol {
+            padding-left: 20px;
+        }
+        .ranking li {
+            margin-bottom: 10px;
+        }
+        .ranking li a {
+            display: flex;
+            align-items: center;
+        }
+        .ranking img {
+            width: 60px;
+            height: 60px;
+            border-radius: 5px;
+            object-fit: cover;
+            margin-right: 10px;
+        }
+
+        /* ▼ 3. フッター (サイト下部) ▼ */
+        footer {
+            text-align: center;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+            font-size: 14px;
+            color: #777;
+        }
+        footer nav ul {
+            padding: 0;
+            list-style: none;
+            margin-bottom: 20px;
+        }
+        footer nav li {
+            display: inline-block;
+            margin: 0 10px;
+        }
+    </style>
+    </head>
+<body>
+
+    <header>
+        <h1><a href="/">MinnaRecom</a></h1>
+        
+        <form action="/search" method="get">
+            <input type="text" placeholder="おすすめを検索...">
+            <button type="submit">検索</button>
+        </form>
+
+        <nav>
+            <ul>
+                <li><a href="/recommendations/new">＋ 新規投稿</a></li>
+                <li><a href="/login">ログイン</a></li>
+                <li><a href="/signup">新規登録</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+
+        <section class="hero">
+            <h2>あなたのおすすめを、<br>みんなに共有しよう。</h2>
+            <p>グルメ、お出かけ、ガジェット...日々の「ちょっと良いもの」発見サイト</p>
+        </section>
+
+        <section class="categories">
+            <h2>カテゴリーから探す</h2>
+            <nav>
+                <ul>
+                    <li><a href="/categories/gourmet">グルメ</a></li>
+                    <li><a href="/categories/outing">お出かけ</a></li>
+                    <li><a href="/categories/gadget">ガジェット</a></li>
+                    <li><a href="/categories/book-movie">本・映画</a></li>
+                    <li><a href="/categories/others">その他</a></li>
+                </ul>
+            </nav>
+        </section>
+
+        <section class="new-arrivals">
+            <h2>新着のおすすめ</h2>
+            
+            <div class="recommend-list">
+                <article class="recommend-card">
+                    <img src="https://via.placeholder.com/300x180?text=Cafe" alt="おすすめの画像1">
+                    <h3><a href="/recommendations/1">最近見つけた最高のカフェ</a></h3>
+                    <p>評価：★★★★☆</p>
+                    <p class="author">投稿者: Tanaさん</p>
+                </article>
+
+                <article class="recommend-card">
+                    <img src="https://via.placeholder.com/300x180?text=Earphone" alt="おすすめの画像2">
+                    <h3><a href="/recommendations/2">このワイヤレスイヤホンがすごい</a></h3>
+                    <p>評価：★★★★★</p>
+                    <p class="author">投稿者: Satoさん</p>
+                </article>
+                
+                <article class="recommend-card">
+                    <img src="https://via.placeholder.com/300x180?text=Spot" alt="おすすめの画像3">
+                    <h3><a href="/recommendations/3">週末行きたい穴場スポット</a></h3>
+                    <p>評価：★★★★☆</p>
+                    <p class="author">投稿者: Mikiさん</p>
+                </article>
+            </div>
+            
+            <p style="text-align: right; margin-top: 20px;">
+                <a href="/recommendations">もっと見る &raquo;</a>
+            </p>
+        </section>
+
+        <section class="ranking">
+            <h2>人気ランキング</h2>
+            <ol>
+                <li>
+                    <a href="/recommendations/10">
+                        <img src="https://via.placeholder.com/60x60?text=Pan" alt="ランキング1位の画像">
+                        <span>感動レベルの「あの」パン屋さん (いいね 100)</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/recommendations/2">
+                        <img src="https://via.placeholder.com/60x60?text=Earphone" alt="ランキング2位の画像">
+                        <span>このワイヤレスイヤホンがすごい (いいね 98)</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/recommendations/15">
+                        <img src="https://via.placeholder.com/60x60?text=Tool" alt="ランキング3位の画像">
+                        <span>仕事が捗る便利ツール5選 (いいね 95)</span>
+                    </a>
+                </li>
+            </ol>
+        </section>
+
+    </main>
+
+    <footer>
+        <nav>
+            <ul>
+                <li><a href="/about">MinnaRecomとは</a></li>
+                <li><a href="/terms">利用規約</a></li>
+                <li><a href="/privacy">プライバシーポリシー</a></li>
+                <li><a href="/contact">お問い合わせ</a></li>
+                
+                <li><a href="#" target="_blank" rel="noopener noreferrer">防災バッグパッカー</a></li>
+                </ul>
+        </nav>
+        <p>&copy; 2025 MinnaRecom</p>
+    </footer>
+
+</body>
+</html>	
