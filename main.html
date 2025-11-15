@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>防災バッグパッカー</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* カスタムスタイルとTailwindの組み合わせ */
+        :root {
+            /* JSで動的に設定されます */
+            --grid-cols: 10;
+            --grid-rows: 12; 
+            --cell-size: 30px; 
+            --bag-width: calc(var(--grid-cols) * var(--cell-size));
+            --bag-height: calc(var(--grid-rows) * var(--cell-size));
+            --bag-color: #38404a; /* バッグの布地色 (ダークネイビーに近い) */
+            --bag-inner-color: #e0e4e8; /* バッグの内部色 (明るいグレー) */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc; /* light gray */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 10vh;
+            padding: 20px;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* --- バッグの外枠と装飾 (鞄型) --- */
+        #bag-area {
+            position: relative;
+            margin-bottom: 20px;
+            padding-top: 60px;
+        }
+
+        #bag-area::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(var(--bag-width) + 16px);
+            height: 60px;
+            background-color: var(--bag-color); 
+            border-radius: 25px 25px 5px 5px; 
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            z-index: 5;
+            border: 4px solid #1a202c;
+        }
+
+        #bag-area::after {
+            content: '🎒'; 
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2.5rem; 
+            z-index: 10;
+            cursor: default;
+        }
+        /* ------------------------------------ */
+
+
+        #bag {
+            width: var(--bag-width);
+            height: var(--bag-height);
+            border: 8px solid #2a3038;
+            position: relative;
+            
+            box-shadow: 
+                inset 0 0 25px rgba(0, 0, 0, 0.7),
+                0 15px 25px rgba(0, 0, 0, 0.3);
+            
+            border-radius: 15px 15px 80px 80px; 
+            overflow: hidden;
+            
+            background: linear-gradient(180deg, var(--bag-inner-color) 0%, #c4c9cd 100%);
+        }
+
+        .grid-cell {
+            position: absolute;
+            width: var(--cell-size);
+            height: var(--cell-size);
+            box-sizing: border-box;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: background-color 0.2s;
+            z-index: 3;
+        }
+
+        .grid-cell.item {
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            transition: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            z-index: 2;
+        }
+
+        /* アイテム表示エリアのスタイル */
+        #next-item-preview {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100px;
+            width: 100%;
+        }
+
+        .piece-cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            display: inline-block;
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }
+
+        /* ピースのコンテナ (フレキシブルな配置を可能にするため) */
+        .piece-container {
+            grid-gap: 0; 
+            display: inline-grid;
+            grid-template-columns: repeat(5, var(--cell-size)); 
+        }
+
+        /* モーダルスタイル */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body class="p-4 bg-gray-100">
+
+<div id="game-container" class="flex flex-col items-center p-4 bg-white rounded-xl shadow-2xl">
+    <h1 class="text-3xl font-bold mb-4 text-gray-800">🎒 防災バッグパッカー (教育版)</h1>
+
+    <!-- 設定画面 -->
+    <div id="settings-screen" class="w-full max-w-lg p-6 bg-gray-50 rounded-lg shadow-inner">
+        <h2 class="text-2xl font-bold mb-4 text-gray-700">ゲーム設定</h2>
+        
+        <!-- シナリオ選択 -->
+        <div class="mb-6">
+            <label class="block text-lg font-semibold mb-2 text-gray-700" for="scenario-select">1. シナリオを選択</label>
+            <p class="text-sm text-gray-500 mb-2">選択したシナリオでアイテムの**重要度**が変わります。</p>
+            <select id="scenario-select" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-150">
+                <!-- Options will be populated by JS -->
+            </select>
+        </div>
+
+        <!-- 難易度選択 -->
+        <div class="mb-6">
+            <label class="block text-lg font-semibold mb-2 text-gray-700">2. 難易度（バッグサイズ）を選択</label>
+            <div id="difficulty-options" class="flex flex-col space-y-2">
+                <!-- Radios will be populated by JS -->
+            </div>
+        </div>
+
+        <button id="start-game-button" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-300 transform hover:scale-[1.01]">
+            ゲームスタート
+        </button>
+    </div>
+
+    <!-- ゲームプレイ画面 -->
+    <div id="game-screen" class="hidden w-full flex flex-col items-center">
+        <!-- ステータスバー -->
+        <div class="w-full max-w-lg mb-4 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-400">
+            <div class="text-sm text-gray-600 mb-1">
+                シナリオ: <span id="current-scenario" class="font-bold text-purple-600"></span> / 難易度: <span id="current-difficulty" class="font-bold text-blue-600"></span>
+            </div>
+            <div class="text-xl font-semibold text-gray-700">
+                スコア (重要度合計): <span id="score" class="text-green-600 text-2xl">0</span>
+            </div>
+            <button id="restart-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 mt-3 hidden">
+                リスタート (設定画面へ)
+            </button>
+        </div>
+
+        <!-- メインバッグエリア -->
+        <div id="bag-area" class="flex flex-col items-center">
+            <div id="bag">
+                <!-- グリッドセルはJSで描画されます -->
+            </div>
+        </div>
+
+        <!-- メッセージエリア -->
+        <div id="message" class="mt-4 text-center font-bold h-6 text-gray-600">
+            <!-- メッセージはJSで更新されます -->
+        </div>
+
+        <!-- 次のアイテムエリア -->
+        <div class="mt-6 p-4 bg-gray-50 rounded-xl shadow-inner w-full max-w-lg">
+            <h2 class="text-xl font-semibold mb-3 text-gray-700">
+                次のアイテム: <span id="next-item-name" class="text-purple-600"></span> 
+                (<span id="dynamic-importance" class="font-bold"></span>)
+            </h2>
+            <div id="next-item-preview" class="border border-gray-300 rounded-lg p-2 h-20">
+                <!-- プレビューはJSで描画されます -->
+            </div>
+            
+            <!-- 新しい説明エリア -->
+            <div id="item-details" class="mt-4 p-3 bg-white rounded-lg border-l-4 border-purple-400 shadow-sm">
+                <p class="text-sm font-semibold text-gray-700">用途:</p>
+                <p id="item-description" class="text-base text-gray-800 mb-2"></p>
+                <p class="text-sm font-semibold text-gray-700">根拠:</p>
+                <p id="item-rationale" class="text-xs text-blue-500 italic"></p>
+            </div>
+
+            <!-- アイテム選択肢エリア -->
+            <div id="choice-area" class="mt-4 flex flex-wrap justify-center space-x-2 sm:space-x-4">
+                <!-- ボタンはJSで挿入されます -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- モーダル (ゲームオーバーレポート) -->
+<div id="report-modal" class="modal hidden">
+    <div class="modal-content w-full sm:w-3/4 lg:w-1/2">
+        <h2 class="text-3xl font-bold mb-4 text-red-600 text-center">🚨 パッキング終了レポート 🚨</h2>
+        <hr class="mb-4">
+        
+        <div class="mb-6 p-4 bg-yellow-50 rounded-lg">
+            <p class="text-lg font-semibold text-gray-800">
+                目標シナリオ: <span id="report-scenario" class="text-purple-600"></span>
+            </p>
+            <p class="text-lg font-semibold text-gray-800">
+                最終スコア: <span id="report-final-score" class="text-green-600 text-2xl">0</span>
+            </p>
+        </div>
+
+        <div id="report-achievment" class="text-center mb-6">
+            <!-- 達成度パーセンテージがここに入る -->
+        </div>
+
+        <h3 class="text-xl font-bold mb-3 text-gray-700 border-b pb-1">🗂️ 改善点とフィードバック</h3>
+        <div id="feedback-content">
+            <!-- レポート内容はJSで生成される -->
+        </div>
+
+        <button id="close-report-button" class="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition duration-300">
+            設定画面に戻る
+        </button>
+    </div>
+</div>
+
+<script type="module">
+    // グリッド設定 (初期値)
+    let GRID_COLS = 10;
+    let GRID_ROWS = 12; 
+    const CELL_SIZE = 30; 
+    const MIN_REQUIRED_IMPORTANCE = 10; // 採点レポートで「必須」と見なすベースの重要度
+
+    // ゲーム変数
+    let grid = []; // 0:空, >0:アイテムID
+    let placedItems = []; // 詰めたアイテムのリスト (レポート用)
+    let score = 0;
+    let isGameOver = false;
+    let currentPiece = null;
+    let currentPieceId = 0; // 詰めたアイテムを識別するためのユニークID
+    let currentPlacement = { row: -1, col: -1 };
+    
+    // シナリオ/難易度設定変数
+    let selectedScenario = 'default';
+    let selectedDifficulty = 'medium';
+
+    // DOM要素
+    const settingsScreen = document.getElementById('settings-screen');
+    const gameScreen = document.getElementById('game-screen');
+    const bagElement = document.getElementById('bag');
+    const scoreElement = document.getElementById('score');
+    const messageElement = document.getElementById('message');
+    const nextItemPreviewElement = document.getElementById('next-item-preview');
+    const nextItemNameElement = document.getElementById('next-item-name');
+    const dynamicImportanceElement = document.getElementById('dynamic-importance');
+    const itemDescriptionElement = document.getElementById('item-description');
+    const itemRationaleElement = document.getElementById('item-rationale');
+    const restartButton = document.getElementById('restart-button');
+    const choiceAreaElement = document.getElementById('choice-area');
+    const startGameButton = document.getElementById('start-game-button');
+    const scenarioSelect = document.getElementById('scenario-select');
+    const difficultyOptions = document.getElementById('difficulty-options');
+    const currentScenarioDisplay = document.getElementById('current-scenario');
+    const currentDifficultyDisplay = document.getElementById('current-difficulty');
+
+    const reportModal = document.getElementById('report-modal');
+    const closeReportButton = document.getElementById('close-report-button');
+    const reportAchievment = document.getElementById('report-achievment');
+    const feedbackContent = document.getElementById('feedback-content');
+    const reportScenario = document.getElementById('report-scenario');
+    const reportFinalScore = document.getElementById('report-final-score');
+
+
+    // --- 設定データ ---
+
+    // 難易度設定: バッグのサイズ
+    const DIFFICULTY_SETTINGS = {
+        'easy': { name: "簡単 (大容量)", cols: 12, rows: 15 }, 
+        'medium': { name: "標準 (中容量)", cols: 10, rows: 12 }, 
+        'hard': { name: "難解 (小容量)", cols: 8, rows: 10 }
+    };
+
+    // シナリオ設定: アイテムの重要度にかかる乗数 (multiplier) を定義
+    const SCENARIOS = {
+        'default': { name: "デフォルト (バランス)", modifiers: {} },
+        'earthquake': { 
+            name: "地震発生 (揺れ)", 
+            modifiers: {
+                "救急セット": 1.5,
+                "懐中電灯": 1.3,
+                "マンガ (全巻)": 0.2 // 避難所生活のストレス対策として少しだけ価値を残す
+            }
+        },
+        'heavy_rain': { 
+            name: "豪雨・水害", 
+            modifiers: {
+                "水 (2L)": 1.5,
+                "防寒着/毛布": 1.5, // 濡れた後の低体温症対策
+                "美容家電 (ヘアアイロン等)": 0.1
+            }
+        },
+        'power_outage': { 
+            name: "長期停電", 
+            modifiers: {
+                "ラジオ/モバイルバッテリー": 2.2,
+                "懐中電灯": 1.8,
+                "ゲーム機本体": 0.0 // 充電手段がないと無価値
+            }
+        },
+        'winter_evacuation': { 
+            name: "冬季避難", 
+            modifiers: {
+                "防寒着/毛布": 2.5,
+                "非常食 (3日分)": 1.3,
+                "大きなぬいぐるみ": 0.5 // 暖をとる用途としてわずかに価値を付与
+            }
+        }
+    };
+    
+    // アイテム定義 (ベースとなる重要度、形状、説明)
+    // category: レポート作成のための分類
+    const BASE_ITEMS = [
+        { name: "水 (2L)", importance: 25, shape: [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1]], color: "#3182ce", description: "飲み水、調理、衛生用。", rationale: "1人1日3Lを目安に3日分。最重要。", category: "LifeSupport" },
+        { name: "非常食 (3日分)", importance: 20, shape: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]], color: "#dd6b20", description: "最低限のカロリーと栄養確保。", rationale: "アルファ米や缶詰など、調理不要なものを中心に。", category: "LifeSupport" },
+        { name: "ラジオ/モバイルバッテリー", importance: 18, shape: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]], color: "#ecc94b", description: "情報収集と通信手段の確保。", rationale: "手回し充電式や大容量バッテリーがあれば安心。", category: "Information" },
+        { name: "防寒着/毛布", importance: 15, shape: [[0, 0], [1, 0], [2, 0], [2, 1]], color: "#9f7aea", description: "低体温症の予防と体温維持。", rationale: "薄い防寒具は重ね着に便利。アルミシートも推奨。", category: "Survival" },
+        { name: "懐中電灯", importance: 12, shape: [[0, 0], [0, 1], [0, 2], [0, 3]], color: "#f6ad55", description: "夜間の移動や状況確認用。", rationale: "LED式で予備電池または充電式が必須。両手が空くヘッドライトが理想。", category: "Information" },
+        { name: "救急セット", importance: 10, shape: [[0, 0], [1, 0], [2, 0]], color: "#48bb78", description: "怪我や持病の応急処置。", rationale: "常備薬、消毒液、絆創膏など。最低限の止血道具は必要。", category: "Survival" },
+        
+        // 不要/浪費アイテム
+        { name: "マンガ (全巻)", importance: 4, shape: [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1]], color: "#718096", description: "避難所での暇つぶし。", rationale: "容量を多く消費する割に、生存に必須ではない。", category: "NonEssential" },
+        { name: "大きなぬいぐるみ", importance: 2, shape: [[0, 0], [0, 1], [1, 0], [1, 1]], color: "#a0aec0", description: "精神的な安定用。", rationale: "子供にとっては重要だが、体積が非常に大きい。", category: "NonEssential" },
+        { name: "美容家電 (ヘアアイロン等)", importance: -5, shape: [[0, 0], [0, 1], [0, 2]], color: "#d53f8c", description: "身だしなみ維持用。", rationale: "電気の確保が困難な状況では使用できず、スペースの無駄。", category: "Waste" },
+        { name: "ゲーム機本体", importance: -8, shape: [[0, 0], [1, 0], [0, 1], [1, 1]], color: "#e53e3e", description: "娯楽用。", rationale: "充電が切れれば使えず、重い。優先度は極めて低い。", category: "Waste" },
+        { name: "ゴルフボール", importance: 1, shape: [[0, 0]], color: "#ffffff", description: "ストレス解消用。", rationale: "小さなスペースを埋めるのには使えるが、ほぼ無意味。", category: "NonEssential" },
+    ];
+
+    // --- 初期設定画面のレンダリング ---
+
+    /**
+     * 初期設定画面にオプションをロードします。
+     */
+    function loadSettingsUI() {
+        // シナリオ選択肢のロード
+        scenarioSelect.innerHTML = '';
+        for (const key in SCENARIOS) {
+            const scenario = SCENARIOS[key];
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = scenario.name;
+            scenarioSelect.appendChild(option);
+        }
+        scenarioSelect.value = selectedScenario;
+        
+        // 難易度（バッグサイズ）のロード
+        difficultyOptions.innerHTML = '';
+        for (const key in DIFFICULTY_SETTINGS) {
+            const setting = DIFFICULTY_SETTINGS[key];
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'difficulty';
+            radio.id = `diff-${key}`;
+            radio.value = key;
+            radio.className = 'mr-2 text-purple-600 focus:ring-purple-500';
+            if (key === selectedDifficulty) {
+                radio.checked = true;
+            }
+
+            const label = document.createElement('label');
+            label.htmlFor = `diff-${key}`;
+            label.className = 'font-medium text-gray-600 cursor-pointer p-2 block border border-gray-200 rounded-lg bg-white hover:bg-gray-100';
+            label.textContent = `${setting.name} (${setting.cols}x${setting.rows})`;
+
+            const div = document.createElement('div');
+            div.className = 'flex items-center';
+            div.appendChild(radio);
+            div.appendChild(label);
+            difficultyOptions.appendChild(div);
+        }
+    }
+
+    /**
+     * ゲームを初期化し、ゲーム画面へ切り替えます。
+     */
+    function initGame() {
+        // 1. 設定値の取得と適用
+        selectedScenario = scenarioSelect.value;
+        const selectedDifficultyKey = difficultyOptions.querySelector('input[name="difficulty"]:checked').value;
+        selectedDifficulty = selectedDifficultyKey;
+
+        const size = DIFFICULTY_SETTINGS[selectedDifficulty];
+        GRID_COLS = size.cols;
+        GRID_ROWS = size.rows;
+        
+        // CSS変数を更新してバッグのサイズを反映
+        document.documentElement.style.setProperty('--grid-cols', GRID_COLS);
+        document.documentElement.style.setProperty('--grid-rows', GRID_ROWS);
+
+        // 2. ゲーム状態の初期化
+        grid = Array(GRID_ROWS).fill(0).map(() => Array(GRID_COLS).fill(0));
+        placedItems = [];
+        score = 0;
+        isGameOver = false;
+        currentPiece = null;
+        currentPieceId = 1; // 1からスタート
+        currentPlacement = { row: -1, col: -1 };
+        bagElement.innerHTML = '';
+        restartButton.classList.add('hidden');
+        reportModal.classList.add('hidden'); // モーダルを非表示に
+
+        // 3. UIの切り替えと更新
+        settingsScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+        currentScenarioDisplay.textContent = SCENARIOS[selectedScenario].name;
+        currentDifficultyDisplay.textContent = DIFFICULTY_SETTINGS[selectedDifficulty].name;
+
+        // 4. グリッドの描画
+        renderInitialBagGrid();
+        updateScore();
+        generateNextPiece();
+    }
+    
+    /**
+     * バッグの初期グリッドセルをDOMに描画します。
+     */
+    function renderInitialBagGrid() {
+        bagElement.innerHTML = '';
+        // bagElementの幅と高さを動的に設定
+        bagElement.style.width = `${GRID_COLS * CELL_SIZE}px`;
+        bagElement.style.height = `${GRID_ROWS * CELL_SIZE}px`;
+
+        for (let r = 0; r < GRID_ROWS; r++) {
+            for (let c = 0; c < GRID_COLS; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                cell.style.top = `${r * CELL_SIZE}px`;
+                cell.style.left = `${c * CELL_SIZE}px`;
+                cell.dataset.row = r;
+                cell.dataset.col = c;
+                cell.addEventListener('click', handleCellClick);
+                bagElement.appendChild(cell);
+            }
+        }
+    }
+
+    /**
+     * スコアを更新し、DOMに反映します。
+     */
+    function updateScore() {
+        scoreElement.textContent = score;
+        if (score < 0) {
+            scoreElement.classList.remove('text-green-600', 'text-yellow-600');
+            scoreElement.classList.add('text-red-600');
+        } else if (score < 50) {
+            scoreElement.classList.remove('text-green-600', 'text-red-600');
+            scoreElement.classList.add('text-yellow-600');
+        } else {
+            scoreElement.classList.remove('text-yellow-600', 'text-red-600');
+            scoreElement.classList.add('text-green-600');
+        }
+    }
+
+    /**
+     * 次に詰めるアイテムをランダムに選択し、表示します。
+     */
+    function generateNextPiece() {
+        removeHighlight();
+        
+        // アイテムをランダムに選択
+        const randomIndex = Math.floor(Math.random() * BASE_ITEMS.length);
+        const basePiece = BASE_ITEMS[randomIndex];
+        
+        // コピーを作成し、IDを割り当てる
+        currentPiece = { ...basePiece, id: currentPieceId }; 
+        currentPieceId++;
+        
+        // シナリオに応じた重要度の計算
+        const scenario = SCENARIOS[selectedScenario];
+        const modifier = scenario.modifiers[currentPiece.name] || 1.0;
+        
+        // 実効重要度 (小数点以下を四捨五入)
+        const effectiveImportance = Math.round(currentPiece.importance * modifier);
+        currentPiece.effectiveImportance = effectiveImportance;
+
+        // UI表示の更新
+        nextItemNameElement.textContent = currentPiece.name;
+        dynamicImportanceElement.textContent = `実効重要度: ${effectiveImportance >= 0 ? '+' : ''}${effectiveImportance}`;
+        dynamicImportanceElement.className = `font-bold ${effectiveImportance >= MIN_REQUIRED_IMPORTANCE ? 'text-red-500' : effectiveImportance > 0 ? 'text-green-600' : 'text-gray-500'}`;
+        
+        // アイテム説明の更新
+        itemDescriptionElement.textContent = currentPiece.description;
+        itemRationaleElement.textContent = currentPiece.rationale;
+
+        // プレビューの描画
+        renderPiecePreview(currentPiece);
+        
+        // 選択肢UIの生成
+        renderChoiceControls(currentPiece);
+
+        // 配置可能な場所が一つもなければゲームオーバー
+        if (!canPlaceAnywhere(currentPiece)) {
+            gameOver();
+            return;
+        }
+
+        messageElement.textContent = `このアイテムを詰めるかスキップするか選択してください。まずバッグ内の配置場所をクリックしてハイライトしてください。`;
+    }
+
+    /**
+     * 指定されたアイテムがバッグ内のどこにも配置できる場所がないかチェックします。
+     */
+    function canPlaceAnywhere(piece) {
+        for (let r = 0; r < GRID_ROWS; r++) {
+            for (let c = 0; c < GRID_COLS; c++) {
+                // startRow=r, startCol=c で衝突がなければ配置可能
+                if (checkCollision(piece, r, c)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * ピースを指定された開始グリッド位置に配置できるか（衝突がないか）チェックします。
+     * 衝突がない場合は true (配置可能)、衝突がある場合は false。
+     */
+    function checkCollision(piece, startRow, startCol) {
+        const shape = piece.shape;
+        for (const [r, c] of shape) {
+            const row = startRow + r;
+            const col = startCol + c;
+
+            // 1. バッグの境界外に出ているかチェック
+            if (row < 0 || row >= GRID_ROWS || col < 0 || col >= GRID_COLS) {
+                return false;
+            }
+
+            // 2. 既存のアイテムと重なっているかチェック (0は空き)
+            if (grid[row][col] !== 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * グリッドセルがクリックされたときのハンドラ (配置場所の選択とハイライト)。
+     */
+    function handleCellClick(e) {
+        if (isGameOver || !currentPiece) return;
+
+        const startRow = parseInt(e.target.dataset.row, 10);
+        const startCol = parseInt(e.target.dataset.col, 10);
+
+        // 配置可能かチェック
+        if (checkCollision(currentPiece, startRow, startCol)) {
+            removeHighlight();
+            currentPlacement = { row: startRow, col: startCol };
+            highlightPlacement(currentPiece, startRow, startCol);
+            
+            messageElement.textContent = `(${startRow}, ${startCol}) を配置場所に選びました。左の「詰める」ボタンをクリックしてください。`;
+
+            const placeButton = choiceAreaElement.querySelector('#place-button');
+            if(placeButton) placeButton.disabled = false;
+
+        } else {
+            messageElement.textContent = 'そこには詰めることができません！他の場所を探してください。';
+            const placeButton = choiceAreaElement.querySelector('#place-button');
+            if(placeButton) placeButton.disabled = true;
+        }
+    }
+    
+    /**
+     * ピースの配置場所をハイライト表示します。
+     */
+    function highlightPlacement(piece, startRow, startCol) {
+        piece.shape.forEach(([r, c]) => {
+            const row = startRow + r;
+            const col = startCol + c;
+            const cellElement = bagElement.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            if (cellElement) {
+                cellElement.style.outline = `3px dashed ${piece.color}`;
+                cellElement.style.zIndex = 4;
+            }
+        });
+    }
+
+    /**
+     * ハイライトを削除し、配置位置をリセットします。
+     */
+    function removeHighlight() {
+        bagElement.querySelectorAll('.grid-cell').forEach(cell => {
+            cell.style.outline = 'none';
+            cell.style.zIndex = 3;
+        });
+        currentPlacement = { row: -1, col: -1 };
+    }
+
+
+    /**
+     * ピースをグリッドに固定し、スコアを更新します。
+     */
+    function placePiece(piece, startRow, startCol) {
+        const shape = piece.shape;
+        const color = piece.color;
+
+        for (const [r, c] of shape) {
+            const row = startRow + r;
+            const col = startCol + c;
+            
+            grid[row][col] = piece.id; // アイテムIDでグリッドを埋める
+
+            const cellElement = bagElement.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            if (cellElement) {
+                cellElement.classList.add('item');
+                cellElement.style.backgroundColor = color;
+                cellElement.dataset.name = piece.name;
+                cellElement.style.outline = 'none';
+            }
+        }
+
+        // 詰めたアイテムリストに追加（レポート用）
+        placedItems.push(piece);
+        score += piece.effectiveImportance; // 動的に計算された重要度を加算
+        updateScore();
+    }
+    
+    /**
+     * アイテム選択肢の操作ボタンをレンダリングします。
+     */
+    function renderChoiceControls(piece) {
+        choiceAreaElement.innerHTML = '';
+        
+        const placeButton = document.createElement('button');
+        placeButton.id = 'place-button';
+        placeButton.className = 'w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-300 disabled:opacity-50 text-base';
+        placeButton.textContent = '選んだ場所に詰める';
+        placeButton.disabled = true;
+        placeButton.addEventListener('click', handlePlaceItem);
+
+        const skipButton = document.createElement('button');
+        skipButton.id = 'skip-button';
+        skipButton.className = 'w-full sm:w-auto bg-yellow-500 hover:bg-yellow-600 text-gray-800 font-bold py-3 px-6 rounded-lg shadow-lg transition duration-300 text-base mt-2 sm:mt-0';
+        skipButton.textContent = 'スキップ (詰めるのをやめる)';
+        skipButton.addEventListener('click', handleSkipItem);
+
+        choiceAreaElement.appendChild(placeButton);
+        choiceAreaElement.appendChild(skipButton);
+    }
+    
+    /**
+     * 詰めるボタンがクリックされた時の処理。
+     */
+    function handlePlaceItem() {
+        if (currentPlacement.row === -1) {
+            messageElement.textContent = 'まず、バッグ内の配置場所をクリックして選んでください！';
+            return;
+        }
+
+        if (checkCollision(currentPiece, currentPlacement.row, currentPlacement.col)) {
+            placePiece(currentPiece, currentPlacement.row, currentPlacement.col);
+            messageElement.textContent = `${currentPiece.name} を詰めました！ (スコア${currentPiece.effectiveImportance >= 0 ? '+' : ''}${currentPiece.effectiveImportance})`;
+            generateNextPiece(); 
+        } else {
+            messageElement.textContent = 'エラー: 選択した場所に配置できませんでした。';
+            removeHighlight();
+        }
+    }
+
+    /**
+     * スキップボタンがクリックされた時の処理。
+     */
+    function handleSkipItem() {
+        removeHighlight();
+        
+        const effectiveImportance = currentPiece.effectiveImportance;
+        
+        if (effectiveImportance >= MIN_REQUIRED_IMPORTANCE) {
+             messageElement.textContent = `${currentPiece.name} (重要度:${effectiveImportance}) をスキップしました。大きな得点チャンスを逃しましたが、スペースは残りました。`;
+        } else if (effectiveImportance <= 0) {
+             messageElement.textContent = `${currentPiece.name} (重要度:${effectiveImportance}) はスキップしました。容量を浪費しなくて賢明です！`;
+        } else {
+             messageElement.textContent = `${currentPiece.name} (重要度:${effectiveImportance}) をスキップしました。`;
+        }
+        
+        generateNextPiece();
+    }
+
+    /**
+     * ゲームオーバー処理。
+     */
+    function gameOver() {
+        isGameOver = true;
+        messageElement.innerHTML = `<span class="text-red-600">ゲームオーバー！</span> これ以上は詰められません。レポート作成中...`;
+        
+        currentPiece = null;
+        nextItemNameElement.textContent = 'なし';
+        dynamicImportanceElement.textContent = '';
+        itemDescriptionElement.textContent = 'ゲーム終了';
+        itemRationaleElement.textContent = 'レポートを確認してください';
+        nextItemPreviewElement.innerHTML = '<div class="text-gray-500">ゲーム終了</div>';
+        choiceAreaElement.innerHTML = '';
+        
+        bagElement.querySelectorAll('.grid-cell').forEach(cell => {
+            cell.removeEventListener('click', handleCellClick);
+        });
+
+        // レポート表示
+        generateReport();
+    }
+
+    /**
+     * ゲーム終了時に防災教育レポートを生成し、モーダルで表示します。
+     */
+    function generateReport() {
+        // 1. 目標スコアの計算と必須アイテムの抽出
+        let targetScore = 0;
+        const requiredItems = [];
+        const requiredItemNames = [];
+        const placedItemNames = placedItems.map(item => item.name);
+
+        BASE_ITEMS.forEach(item => {
+            const scenario = SCENARIOS[selectedScenario];
+            const modifier = scenario.modifiers[item.name] || 1.0;
+            const effectiveImportance = Math.round(item.importance * modifier);
+            
+            // 重要度がMIN_REQUIRED_IMPORTANCE以上のアイテムを必須と見なす
+            if (effectiveImportance >= MIN_REQUIRED_IMPORTANCE) {
+                targetScore += effectiveImportance;
+                requiredItems.push({ ...item, effectiveImportance });
+                requiredItemNames.push(item.name);
+            }
+        });
+
+        // 2. 達成度の計算
+        const achievement = targetScore > 0 ? Math.min(100, Math.round((score / targetScore) * 100)) : 100;
+
+        // 3. フィードバックの生成
+        const feedback = [];
+        const missingItems = requiredItems.filter(item => !placedItemNames.includes(item.name));
+        const wasteItems = placedItems.filter(item => item.category === "Waste" || (item.category === "NonEssential" && item.effectiveImportance < 5));
+        
+        // 必須アイテムの不足
+        if (missingItems.length > 0) {
+            feedback.push({
+                type: 'bad',
+                title: '❌ 必須アイテムの不足',
+                details: `今回の**「${SCENARIOS[selectedScenario].name}」**シナリオにおいて、以下の重要アイテムがバッグにありませんでした。これらが不足すると、生存率が大幅に低下する恐れがあります。`,
+                items: missingItems.map(item => `${item.name} (重要度: ${item.effectiveImportance})`)
+            });
+        } else {
+            feedback.push({
+                type: 'good',
+                title: '✅ 必須アイテムの確保',
+                details: '今回のシナリオで必要な最重要アイテムは全て確保できています。素晴らしい判断です！',
+                items: []
+            });
+        }
+
+        // 不要なアイテムの配置
+        if (wasteItems.length > 0) {
+            feedback.push({
+                type: 'bad',
+                title: '⚠️ 容量を浪費したアイテム',
+                details: `以下のアイテムは、今回の災害シナリオでは重要度が低い（またはマイナス）にも関わらず、貴重なバッグのスペースを占有しました。`,
+                items: wasteItems.map(item => `${item.name} (スコア: ${item.effectiveImportance}) - ${item.rationale}`)
+            });
+        }
+        
+        // スコアに基づいた総評
+        let summary = '';
+        if (achievement >= 90 && wasteItems.length === 0) {
+            summary = '🥇 完璧です！目標スコアを大きく上回り、必須アイテムを全て確保し、無駄なアイテムもありませんでした。';
+        } else if (achievement >= 70) {
+            summary = '🥈 非常に優秀です。主要なアイテムは揃っており、実用的なバッグが完成しました。わずかな改善点のみです。';
+        } else if (achievement >= 50) {
+            summary = '🥉 まずまずです。基本的な生存は可能ですが、特定のシナリオに対応するための重要アイテムがいくつか不足しています。';
+        } else {
+            summary = '😭 要改善です。バッグの容量を効率的に使えず、必須となるアイテムの多くを確保できませんでした。もう一度、アイテムの優先順位を見直しましょう。';
+        }
+
+        // 4. モーダルへの表示
+        
+        // 達成度表示 (円グラフ風)
+        let achievementColor = achievement >= 70 ? 'text-green-600' : achievement >= 50 ? 'text-yellow-600' : 'text-red-600';
+        reportAchievment.innerHTML = `
+            <div class="inline-flex items-center justify-center p-8 rounded-full border-8 border-gray-200"
+                 style="background: conic-gradient(var(--tw-c-achievement) 0% ${achievement}%, #e5e7eb ${achievement}% 100%); 
+                        --tw-c-achievement: ${achievement >= 70 ? '#10b981' : achievement >= 50 ? '#fbbf24' : '#ef4444'};">
+                <div class="flex flex-col items-center justify-center bg-white w-28 h-28 rounded-full shadow-lg">
+                    <span class="text-4xl font-extrabold ${achievementColor}">${achievement}%</span>
+                    <span class="text-sm font-medium text-gray-500">対応度</span>
+                </div>
+            </div>
+            <p class="mt-4 text-xl font-bold ${achievementColor}">${summary}</p>
+        `;
+        
+        // 詳細レポート表示
+        feedbackContent.innerHTML = '';
+        feedback.forEach(item => {
+            const div = document.createElement('div');
+            div.className = `p-4 mt-3 rounded-lg border-l-4 ${item.type === 'good' ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'}`;
+            div.innerHTML = `
+                <p class="font-bold text-lg mb-1 ${item.type === 'good' ? 'text-green-700' : 'text-red-700'}">${item.title}</p>
+                <p class="text-sm text-gray-600 mb-2">${item.details}</p>
+                ${item.items.length > 0 ? `<ul class="list-disc list-inside text-sm text-gray-800 ml-4">${item.items.map(i => `<li>${i}</li>`).join('')}</ul>` : ''}
+            `;
+            feedbackContent.appendChild(div);
+        });
+        
+        // 最終スコア表示
+        reportScenario.textContent = SCENARIOS[selectedScenario].name;
+        reportFinalScore.textContent = score;
+
+        // モーダルを表示
+        reportModal.classList.remove('hidden');
+    }
+
+    /**
+     * ピースのプレビューをDOMに描画します。
+     */
+    function renderPiecePreview(piece) {
+        nextItemPreviewElement.innerHTML = '';
+        
+        let maxRow = 0;
+        let maxCol = 0;
+        piece.shape.forEach(([r, c]) => {
+            maxRow = Math.max(maxRow, r);
+            maxCol = Math.max(maxCol, c);
+        });
+
+        const container = document.createElement('div');
+        container.className = 'piece-container';
+        container.style.gridTemplateColumns = `repeat(${maxCol + 1}, ${CELL_SIZE}px)`;
+        
+        const previewGrid = Array(maxRow + 1).fill(0).map(() => Array(maxCol + 1).fill(0));
+        
+        piece.shape.forEach(([r, c]) => {
+            if (r <= maxRow && c <= maxCol) {
+                previewGrid[r][c] = 1;
+            }
+        });
+
+        for (let r = 0; r <= maxRow; r++) {
+            for (let c = 0; c <= maxCol; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'piece-cell';
+                if (previewGrid[r][c] === 1) {
+                    cell.style.backgroundColor = piece.color;
+                    cell.classList.add('shadow-md');
+                } else {
+                    cell.style.backgroundColor = 'transparent'; 
+                    cell.style.border = '1px solid transparent';
+                }
+                container.appendChild(cell);
+            }
+        }
+
+        nextItemPreviewElement.appendChild(container);
+    }
+
+    // --- イベントリスナー設定 ---
+    
+    // 設定をロード
+    loadSettingsUI();
+    
+    // ゲーム開始ボタン
+    startGameButton.addEventListener('click', initGame);
+
+    // リスタートボタン (設定画面に戻る)
+    restartButton.addEventListener('click', () => {
+        gameScreen.classList.add('hidden');
+        settingsScreen.classList.remove('hidden');
+        loadSettingsUI();
+    });
+
+    // モーダルを閉じるボタン (設定画面に戻る)
+    closeReportButton.addEventListener('click', () => {
+        reportModal.classList.add('hidden');
+        gameScreen.classList.add('hidden');
+        settingsScreen.classList.remove('hidden');
+        loadSettingsUI();
+    });
+
+    // 初期起動時は設定画面を表示
+    gameScreen.classList.add('hidden');
+</script>
+
+</body>
+</html>
